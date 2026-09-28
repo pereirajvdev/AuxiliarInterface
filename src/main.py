@@ -71,19 +71,19 @@ def lerControles():
 
     for i, controle in enumerate(controles):
         try:
-            texto = controle.window_text()
-            classe = controle.class_name()
+            rect = controle.rectangle()
 
-            if texto or classe:
-                print(
-                    f"[{i}] "
-                    f"texto={texto!r} | "
-                    f"classe={classe!r} | "
-                    f"handle={controle.handle}"
-                )
+            print(
+                f"[{i}] "
+                f"texto={controle.window_text()!r} | "
+                f"classe={controle.class_name()!r} | "
+                f"handle={controle.handle} | "
+                f"posição=({rect.left}, {rect.top}) | "
+                f"tamanho=({rect.width()}x{rect.height()})"
+            )
 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[{i}] Erro: {e}")
             
 def diagnosticoWin32():
     janela = Desktop(backend="win32").window(
