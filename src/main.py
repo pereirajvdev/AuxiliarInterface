@@ -2,8 +2,10 @@ import argparse
 import time
 import ctypes
 
+from ctypes import wintypes
 from pywinauto import Desktop
 
+TITLE_TO_READ = "Ficha_Financeira_Resumo_Geral"#"Preparando relatório - Ficha_Financeira_Resumo_Geral"
 
 def lerScreen():
     print("Procurando janelas abertas...\n")
@@ -19,7 +21,7 @@ def lerScreen():
 
 def lerBotoes():
     janela = Desktop(backend="win32").window(
-        title="Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
+        title=TITLE_TO_READ
     )
 
     print("Janela encontrada:", janela.exists())
@@ -42,7 +44,7 @@ def lerBotoes():
 
 def lerBotoes2():
     janela = Desktop(backend="win32").window(
-        title="Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
+        title=TITLE_TO_READ
     )
 
     print("Janela encontrada:", janela.exists())
@@ -58,7 +60,7 @@ def lerBotoes2():
 
 def lerControles():
     janela = Desktop(backend="win32").window(
-        title="Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
+        title=TITLE_TO_READ
     )
 
     if not janela.exists():
@@ -87,7 +89,7 @@ def lerControles():
             
 def diagnosticoWin32():
     janela = Desktop(backend="win32").window(
-        title="FmImpSelecionaDados"
+        title=TITLE_TO_READ#"FmImpSelecionaDados"
     )
 
     print("Janela encontrada:", janela.exists())
@@ -147,7 +149,7 @@ def obter_foco():
 
 def testarTeclado():
     janela = Desktop(backend="win32").window(
-        title="FmImpSelecionaDados"
+        title=TITLE_TO_READ#"FmImpSelecionaDados"
     )
 
     if not janela.exists():
@@ -198,7 +200,7 @@ def testarTeclado():
 
 def testarFoco():
     janela = Desktop(backend="win32").window(
-        title="FmImpSelecionaDados"
+        title=TITLE_TO_READ#"FmImpSelecionaDados"
     )
 
     if not janela.exists():
@@ -225,6 +227,219 @@ def testarFoco():
 
         except Exception as e:
             print(f"TAB {i + 1} - erro: {e}")
+
+
+def lerHints():
+    janela = Desktop(backend="win32").window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    from pywinauto import mouse
+
+    controles = janela.descendants()
+    desktop = Desktop(backend="win32")
+
+    print("\nPROCURANDO HINTS...")
+    print("=" * 80)
+
+    for i, controle in enumerate(controles):
+
+        try:
+            rect = controle.rectangle()
+
+            if rect.width() <= 0 or rect.height() <= 0:
+                continue
+
+            x = (rect.left + rect.right) // 2
+            y = (rect.top + rect.bottom) // 2
+
+            # -------------------------------------------------
+            # Snapshot ANTES
+            # -------------------------------------------------
+
+            antes = {
+                item.handle
+                for item in desktop.windows()
+            }
+
+            # -------------------------------------------------
+            # Move mouse
+            # -------------------------------------------------
+
+            mouse.move(coords=(x, y))
+
+            time.sleep(1.0)
+
+            # -------------------------------------------------
+            # Snapshot DEPOIS
+            # -------------------------------------------------
+
+            depois = desktop.windows()
+
+            novas = []
+
+            for item in depois:
+
+                try:
+                    if item.handle not in antes:
+                        novas.append(item)
+
+                except Exception:
+                    pass
+
+            # -------------------------------------------------
+            # Filtra somente possíveis Hints
+            # -------------------------------------------------
+
+            for item in novas:
+
+                try:
+                    titulo = item.window_text()
+                    classe = item.class_name()
+
+                    # Ignora coisas conhecidas que não interessam
+                    classes_ignoradas = {
+                        "IME",
+                        "TDataSetValidDialog",
+                    }
+
+                    if classe in classes_ignoradas:
+                        continue
+
+                    if not titulo:
+                        continue
+
+                    print()
+                    print(f"CONTROLE [{i}]")
+                    print(f"  Texto       : {controle.window_text()!r}")
+                    print(f"  Classe      : {controle.class_name()!r}")
+                    print(f"  Handle      : {controle.handle}")
+                    print(f"  HINT        : {titulo!r}")
+                    print(f"  Classe Hint : {classe!r}")
+                    print("-" * 80)
+
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
+
+def lerPropriedades():
+    janela = Desktop(backend="win32").window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    controles = janela.descendants()
+
+    print("\nPROPRIEDADES DOS CONTROLES")
+    print("=" * 80)
+
+    for i, controle in enumerate(controles):
+
+        try:
+            propriedades = controle.get_properties()
+
+            textos = {}
+
+            for nome, valor in propriedades.items():
+
+                if valor is None:
+                    continue
+
+                valor_str = str(valor).strip()
+
+                if not valor_str:
+                    continue
+
+                # Procuramos propriedades que possam conter
+                # o texto do Hint/Gadget
+                if any(
+                    palavra in nome.lower()
+                    for palavra in [
+                        "text",
+                        "name",
+                        "title",
+                        "caption",
+                        "description",
+                        "help",
+                        "hint",
+                    ]
+                ):
+                    textos[nome] = valor
+
+            if not textos:
+                continue
+
+            print()
+            print(f"CONTROLE [{i}]")
+            print("-" * 80)
+
+            print(
+                "Classe :",
+                repr(controle.class_name())
+            )
+
+            print(
+                "Handle :",
+                controle.handle
+            )
+
+            print(
+                "Texto  :",
+                repr(controle.window_text())
+            )
+
+            for nome, valor in textos.items():
+                print(
+                    f"  {nome:<20}: {valor!r}"
+                )
+
+        except Exception as e:
+            print(
+                f"[{i}] Erro: {e}"
+            )
+
+
+def lerControleMouse():
+    user32 = ctypes.windll.user32
+
+    ponto = ctypes.wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(ponto))
+
+    hwnd = user32.WindowFromPoint(ponto)
+
+    print("POSIÇÃO DO MOUSE")
+    print("-" * 50)
+    print("X:", ponto.x)
+    print("Y:", ponto.y)
+    print("HWND:", hwnd)
+
+    if not hwnd:
+        print("Nenhum controle encontrado.")
+        return
+
+    try:
+        controle = Desktop(backend="win32").window(handle=hwnd)
+
+        print("\nCONTROLE")
+        print("-" * 50)
+        print("Texto  :", repr(controle.window_text()))
+        print("Classe :", repr(controle.class_name()))
+        print("Handle :", controle.handle)
+        print("Rect   :", controle.rectangle())
+
+    except Exception as e:
+        print("Erro:", e)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -273,6 +488,24 @@ def main():
         help="Investiga o elemento ativo após cada TAB."
     )
 
+    parser.add_argument(
+        "--lerHints",
+        action="store_true",
+        help="Move o mouse pelos controles e procura os Hints."
+    )
+
+    parser.add_argument(
+        "--lerPropriedades",
+        action="store_true",
+        help="Mostra propriedades textuais dos controles."
+    )
+
+    parser.add_argument(
+        "--lerControleMouse",
+        action="store_true",
+        help="Identifica o controle que está sob o mouse."
+    )
+    
     args = parser.parse_args()
 
     if args.lerScreen:
@@ -295,6 +528,15 @@ def main():
 
     if args.testarFoco:
         testarFoco()    
+
+    if args.lerHints:
+        lerHints()
+
+    if args.lerPropriedades:
+        lerPropriedades()
+
+    if args.lerControleMouse:
+        lerControleMouse()
 
 if __name__ == "__main__":
     main()
