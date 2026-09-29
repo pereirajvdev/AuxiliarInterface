@@ -5,7 +5,7 @@ import ctypes
 from ctypes import wintypes
 from pywinauto import Desktop
 
-TITLE_TO_READ = "Ficha_Financeira_Resumo_Geral"#"Preparando relatório - Ficha_Financeira_Resumo_Geral"
+TITLE_TO_READ = "Imprimir"#"Preparando relatório - Ficha_Financeira_Resumo_Geral"
 
 def lerScreen():
     print("Procurando janelas abertas...\n")
@@ -20,27 +20,27 @@ def lerScreen():
 
 
 def lerBotoes():
-    janela = Desktop(backend="win32").window(
-        title=TITLE_TO_READ
+    desktop = Desktop(backend="win32")
+
+    janelas = desktop.windows(
+        title=TITLE_TO_READ,
+        top_level_only=True
     )
 
-    print("Janela encontrada:", janela.exists())
+    print(f"Janelas encontradas com título {TITLE_TO_READ!r}: {len(janelas)}\n")
 
-    if not janela.exists():
-        print("Janela não encontrada.")
-        return
-
-    print("\nINFORMAÇÕES DA JANELA")
-    print("-" * 60)
-    print("Handle:", janela.handle)
-    print("Título:", janela.window_text())
-    print("Classe:", janela.class_name())
-    print("Rect:", janela.rectangle())
-
-    print("\nCONTROLES:")
-    print("-" * 60)
-
-    janela.print_control_identifiers()
+    for i, janela in enumerate(janelas):
+        try:
+            print("=" * 70)
+            print(f"[{i}]")
+            print("Handle :", janela.handle)
+            print("Título :", repr(janela.window_text()))
+            print("Classe :", repr(janela.class_name()))
+            print("Rect   :", janela.rectangle())
+            print("Visível:", janela.is_visible())
+            print("Ativa  :", janela.is_active())
+        except Exception as e:
+            print(f"Erro: {e}")
 
 def lerBotoes2():
     janela = Desktop(backend="win32").window(
@@ -86,7 +86,38 @@ def lerControles():
 
         except Exception as e:
             print(f"[{i}] Erro: {e}")
-            
+
+
+def lerControlesImprimir():
+    janela = Desktop(backend="win32").window(
+        class_name="TfrPrintForm"
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    controles = janela.descendants()
+
+    print(f"Total de controles encontrados: {len(controles)}\n")
+
+    for i, controle in enumerate(controles):
+        try:
+            rect = controle.rectangle()
+
+            print(
+                f"[{i}] "
+                f"texto={controle.window_text()!r} | "
+                f"classe={controle.class_name()!r} | "
+                f"handle={controle.handle} | "
+                f"posição=({rect.left}, {rect.top}) | "
+                f"tamanho=({rect.width()}x{rect.height()})"
+            )
+
+        except Exception as e:
+            print(f"[{i}] Erro: {e}")
+
+
 def diagnosticoWin32():
     janela = Desktop(backend="win32").window(
         title=TITLE_TO_READ#"FmImpSelecionaDados"
@@ -417,28 +448,255 @@ def lerControleMouse():
 
     hwnd = user32.WindowFromPoint(ponto)
 
+    if not hwnd:
+        print("Nenhum controle encontrado.")
+        return
+
+    desktop = Desktop(backend="win32")
+
+    controle = desktop.window(handle=hwnd)
+
     print("POSIÇÃO DO MOUSE")
     print("-" * 50)
     print("X:", ponto.x)
     print("Y:", ponto.y)
+
+    print("\nCONTROLE SOB O MOUSE")
+    print("-" * 50)
+    print("Texto  :", repr(controle.window_text()))
+    print("Classe :", repr(controle.class_name()))
+    print("Handle :", controle.handle)
+    print("Rect   :", controle.rectangle())
+
+    print("\nPAIS")
+    print("-" * 50)
+
+    atual = controle
+
+    for nivel in range(10):
+        try:
+            pai_hwnd = user32.GetParent(atual.handle)
+
+            if not pai_hwnd:
+                break
+
+            pai = desktop.window(handle=pai_hwnd)
+
+            print(
+                f"[{nivel + 1}] "
+                f"Classe={pai.class_name()!r} | "
+                f"Texto={pai.window_text()!r} | "
+                f"Handle={pai.handle}"
+            )
+
+            atual = pai
+
+        except Exception as e:
+            print("Erro:", e)
+            break
+
+    print("\nFILHOS DO CONTROLE SOB O MOUSE")
+    print("-" * 50)
+
+    try:
+        filhos = controle.children()
+
+        print("Quantidade:", len(filhos))
+
+        for i, filho in enumerate(filhos):
+            print(
+                f"[{i}] "
+                f"Classe={filho.class_name()!r} | "
+                f"Texto={filho.window_text()!r} | "
+                f"Handle={filho.handle} | "
+                f"Rect={filho.rectangle()}"
+            )
+
+    except Exception as e:
+        print("Erro:", e)
+
+
+def testarCliqueMouse():
+    janela = Desktop(backend="win32").window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    print("Posicione o mouse sobre o botão 'Imprimir'.")
+    input("Pressione ENTER quando estiver sobre o botão...")
+
+    user32 = ctypes.windll.user32
+
+    ponto = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(ponto))
+
+    print("\nMOUSE")
+    print("-" * 50)
+    print("X:", ponto.x)
+    print("Y:", ponto.y)
+
+    hwnd = user32.WindowFromPoint(ponto)
+
     print("HWND:", hwnd)
+
+    if hwnd:
+        controle = Desktop(backend="win32").window(handle=hwnd)
+
+        print("Classe:", repr(controle.class_name()))
+        print("Texto :", repr(controle.window_text()))
+
+    print("\nAgora pressione o botão esquerdo do mouse.")
+    print("Aguardando...")
+
+    time.sleep(1)
+
+
+def monitorarMouse():
+    user32 = ctypes.windll.user32
+
+    print("Mova o mouse sobre a barra.")
+    print("Pressione CTRL+C para parar.\n")
+
+    ultima = None
+
+    while True:
+        ponto = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(ponto))
+
+        posicao = (ponto.x, ponto.y)
+
+        if posicao != ultima:
+            hwnd = user32.WindowFromPoint(ponto)
+
+            try:
+                controle = Desktop(backend="win32").window(
+                    handle=hwnd
+                )
+
+                print(
+                    f"X={ponto.x:<4} "
+                    f"Y={ponto.y:<4} "
+                    f"HWND={hwnd:<10} "
+                    f"Classe={controle.class_name()!r}"
+                )
+
+            except Exception:
+                pass
+
+            ultima = posicao
+
+        time.sleep(0.05)
+
+
+def clicarImprimir():
+    janela = Desktop(backend="win32").window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    painel = janela.child_window(
+        class_name="TPanel"
+    )
+
+    print("Painel encontrado:", painel.exists())
+    print("Rect:", painel.rectangle())
+
+    painel.click_input(
+        coords=(315, 20)
+    )
+
+def testarPosicaoImprimir():
+    janela = Desktop(backend="win32").window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists():
+        print("Janela não encontrada.")
+        return
+
+    # TPanel da barra superior
+    painel = Desktop(backend="win32").window(
+        handle=1575844
+    )
+
+    if not painel.exists():
+        print("Painel não encontrado.")
+        return
+
+    rect = painel.rectangle()
+
+    print("Painel encontrado:")
+    print("Handle:", painel.handle)
+    print("Classe:", painel.class_name())
+    print("Rect:", rect)
+
+    # Posição aproximada do gadget Imprimir
+    x = rect.left + 315
+    y = rect.top + 20
+
+    print(f"\nMovendo mouse para X={x}, Y={y}")
+
+    ctypes.windll.user32.SetCursorPos(x, y)
+
+    print("Mouse posicionado.")
+    print("Verifique se aparece o texto 'Imprimir'.")
+
+
+def clicarOndeEstaOMouse():
+    user32 = ctypes.windll.user32
+
+    ponto = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(ponto))
+
+    hwnd = user32.WindowFromPoint(ponto)
 
     if not hwnd:
         print("Nenhum controle encontrado.")
         return
 
-    try:
-        controle = Desktop(backend="win32").window(handle=hwnd)
+    controle = Desktop(backend="win32").window(
+        handle=hwnd
+    )
 
-        print("\nCONTROLE")
-        print("-" * 50)
-        print("Texto  :", repr(controle.window_text()))
-        print("Classe :", repr(controle.class_name()))
-        print("Handle :", controle.handle)
-        print("Rect   :", controle.rectangle())
+    print("CONTROLE")
+    print("-" * 50)
+    print("X:", ponto.x)
+    print("Y:", ponto.y)
+    print("Classe:", controle.class_name())
+    print("Texto:", repr(controle.window_text()))
+    print("Handle:", controle.handle)
+    print("Rect:", controle.rectangle())
 
-    except Exception as e:
-        print("Erro:", e)
+    print("\nClique em 3 segundos...")
+
+    time.sleep(3)
+
+    user32.SetCursorPos(ponto.x, ponto.y)
+
+    # Clique esquerdo
+    user32.mouse_event(
+        0x0002,  # MOUSEEVENTF_LEFTDOWN
+        0,
+        0,
+        0,
+        0
+    )
+
+    user32.mouse_event(
+        0x0004,  # MOUSEEVENTF_LEFTUP
+        0,
+        0,
+        0,
+        0
+    )
+
+    print("Clique realizado.")
 
 
 def main():
@@ -489,6 +747,12 @@ def main():
     )
 
     parser.add_argument(
+        "--lerControlesImprimir",
+        action="store_true",
+        help="Investiga o elemento ativo após cada TAB."
+    )
+
+    parser.add_argument(
         "--lerHints",
         action="store_true",
         help="Move o mouse pelos controles e procura os Hints."
@@ -505,6 +769,31 @@ def main():
         action="store_true",
         help="Identifica o controle que está sob o mouse."
     )
+
+    parser.add_argument(
+        "--testarCliqueMouse",
+        action="store_true",
+        help="Investiga o controle sob o mouse."
+    )
+ 
+    parser.add_argument(
+        "--monitorarMouse",
+        action="store_true",
+        help="Monitora a posição do mouse."
+    )
+
+    parser.add_argument(
+        "--clicarImprimir",
+        action="store_true",
+        help="Clica no gadget Imprimir."
+    )
+    
+    parser.add_argument(
+        "--clicarOndeEstaOMouse",
+        action="store_true",
+        help="Clica na posição atual do mouse."
+    )
+
     
     args = parser.parse_args()
 
@@ -519,6 +808,9 @@ def main():
 
     if args.lerControles:
         lerControles()
+
+    if args.lerControles:
+        lerControlesImprimir()
 
     if args.diagnostico:
         diagnosticoWin32()
@@ -538,5 +830,64 @@ def main():
     if args.lerControleMouse:
         lerControleMouse()
 
+    if args.testarCliqueMouse:
+        testarCliqueMouse()
+
+    if args.monitorarMouse:
+        monitorarMouse()
+
+    if args.clicarImprimir:
+        clicarImprimir()
+
+    if args.clicarOndeEstaOMouse:
+        clicarOndeEstaOMouse()
+    
+   
 if __name__ == "__main__":
     main()
+
+
+user32 = ctypes.windll.user32
+
+
+class POINT(ctypes.Structure):
+    _fields_ = [
+        ("x", wintypes.LONG),
+        ("y", wintypes.LONG),
+    ]
+
+'''
+def ler_controle_mouse():
+    ponto = POINT()
+
+    user32.GetCursorPos(ctypes.byref(ponto))
+
+    hwnd = user32.WindowFromPoint(ponto)
+
+    print("=" * 60)
+    print("POSIÇÃO DO MOUSE")
+    print("=" * 60)
+    print(f"X: {ponto.x}")
+    print(f"Y: {ponto.y}")
+
+    print("\n" + "=" * 60)
+    print("WINDOWFROMPOINT")
+    print("=" * 60)
+    print(f"HWND: {hwnd}")
+
+    if hwnd:
+        buffer = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, buffer, 256)
+
+        print(f"Classe: {buffer.value}")
+
+        buffer = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(hwnd, buffer, 256)
+
+        print(f"Texto : {buffer.value!r}")
+
+
+if __name__ == "__main__":
+    ler_controle_mouse()
+
+'''
