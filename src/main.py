@@ -5,7 +5,12 @@ import ctypes
 from ctypes import wintypes
 from pywinauto import Desktop
 
-TITLE_TO_READ = "Imprimir"#"Preparando relatório - Ficha_Financeira_Resumo_Geral"
+#TITLE_TO_READ = "Salvar Saída de Impressão como"
+
+#TITLE_TO_READ = "Preparando relatório - Ficha_Financeira_Resumo_Geral"
+
+TITLE_TO_READ = "Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
+
 
 def lerScreen():
     print("Procurando janelas abertas...\n")
@@ -699,6 +704,213 @@ def clicarOndeEstaOMouse():
     print("Clique realizado.")
 
 
+def lerNome():
+    desktop = Desktop(backend="win32")
+
+    janela = desktop.window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists(timeout=2):
+        print("Janela principal não encontrada.")
+        return
+
+    print("Janela principal encontrada.")
+    print()
+    print("TEXTOS DOS CONTROLES")
+    print("=" * 80)
+
+    controles = janela.descendants()
+
+    for i, controle in enumerate(controles):
+        try:
+            texto = controle.window_text()
+
+            if not texto:
+                continue
+
+            print(
+                f"[{i}] "
+                f"texto={texto!r} | "
+                f"classe={controle.class_name()!r} | "
+                f"handle={controle.handle}"
+            )
+
+        except Exception:
+            pass
+
+
+def lerPropriedadesNome():
+    desktop = Desktop(backend="win32")
+
+    janela = desktop.window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists(timeout=2):
+        print("Janela principal não encontrada.")
+        return
+
+    print("Janela principal encontrada.")
+    print()
+    print("CONTROLES RELACIONADOS AO FUNCIONÁRIO")
+    print("=" * 80)
+
+    controles = janela.descendants()
+
+    for i, controle in enumerate(controles):
+        try:
+            classe = controle.class_name()
+
+            if classe not in (
+                "TcxCustomInnerTextEdit",
+                "TcxSpinEdit",
+                "TelLookupCombo",
+                "TelComboBox",
+                "TComboBox",
+            ):
+                continue
+
+            print("-" * 80)
+            print(f"[{i}]")
+            print("Classe       :", classe)
+            print("Handle       :", controle.handle)
+            print("Window text  :", repr(controle.window_text()))
+
+            try:
+                print("Texto        :", repr(controle.texts()))
+            except Exception as e:
+                print("Texto        :", f"erro: {e}")
+
+            try:
+                print("Valor        :", repr(controle.get_value()))
+            except Exception as e:
+                print("Valor        :", f"erro: {e}")
+
+            try:
+                print("Rect         :", controle.rectangle())
+            except Exception as e:
+                print("Rect         :", f"erro: {e}")
+
+        except Exception as e:
+            print(f"Erro no controle [{i}]: {e}")
+
+
+def ler_textos_preview():
+    desktop = Desktop(backend="win32")
+
+    print("Procurando preview...")
+
+    janelas = desktop.windows()
+
+    for janela in janelas:
+        try:
+            titulo = janela.window_text()
+            classe = janela.class_name()
+
+            print(
+                f"Janela: {titulo!r} | "
+                f"Classe: {classe!r} | "
+                f"Handle: {janela.handle}"
+            )
+
+            if (
+                classe == "TfrmPreview"
+                and titulo == "Ficha_Financeira_Resumo_Geral"
+            ):
+                print()
+                print("Preview encontrado.")
+                print()
+                print("TEXTOS DO PREVIEW")
+                print("=" * 80)
+
+                for i, controle in enumerate(
+                    janela.descendants()
+                ):
+                    try:
+                        texto = controle.window_text()
+
+                        if texto:
+                            print(
+                                f"[{i}] "
+                                f"texto={texto!r} | "
+                                f"classe={controle.class_name()!r} | "
+                                f"handle={controle.handle}"
+                            )
+
+                    except Exception:
+                        pass
+
+                return
+
+        except Exception:
+            pass
+
+    print()
+    print("Preview não encontrado.")
+
+
+def investigar_funcionario():
+    desktop = Desktop(backend="win32")
+
+    janela = desktop.window(
+        title=TITLE_TO_READ
+    )
+
+    if not janela.exists(timeout=2):
+        print("Janela principal não encontrada.")
+        return
+
+    controles = janela.descendants(
+        class_name="TelLookupCombo"
+    )
+
+    print("TelLookupCombos encontrados:")
+    print("=" * 70)
+
+    for i, controle in enumerate(controles):
+        try:
+            print(f"\n[{i}]")
+            print("Handle      :", controle.handle)
+            print("Window text :", repr(controle.window_text()))
+            print("Texts       :", repr(controle.texts()))
+            print("Rect        :", controle.rectangle())
+
+        except Exception as e:
+            print("Erro:", e)
+
+
+def ler_lista_funcionario():
+    desktop = Desktop(backend="win32")
+
+    janela = desktop.window(title=TITLE_TO_READ)
+
+    if not janela.exists(timeout=2):
+        print("Janela principal não encontrada.")
+        return
+
+    listbox = janela.window(handle=133792)
+
+    print("LISTBOX")
+    print("=" * 70)
+    print("Handle :", listbox.handle)
+    print("Classe :", listbox.class_name())
+    print("Texto  :", repr(listbox.window_text()))
+
+    try:
+        itens = listbox.texts()
+
+        print()
+        print("ITENS")
+        print("=" * 70)
+        print("Quantidade:", len(itens))
+
+        for i, item in enumerate(itens):
+            print(f"[{i}] {item!r}")
+
+    except Exception as e:
+        print("Erro ao obter itens:", e)
+
 def main():
     parser = argparse.ArgumentParser(
         description="Auxiliar para interação com a interface do sistema."
@@ -794,6 +1006,36 @@ def main():
         help="Clica na posição atual do mouse."
     )
 
+    parser.add_argument(
+        "--lerNome",
+        action="store_true",
+        help="Procura informações de nome na janela principal."
+    )
+
+    parser.add_argument(
+        "--lerPropriedadesNome",
+        action="store_true",
+        help="Investiga propriedades dos controles relacionados ao funcionário."
+    )
+
+    parser.add_argument(
+        "--lerNomePreview",
+        action="store_true",
+        help="Lista os textos encontrados no preview da ficha financeira."
+    )
+
+    parser.add_argument(
+        "--investigarFuncionario",
+        action="store_true",
+        help="Investiga os controles de seleção do funcionário."
+    )
+
+
+    parser.add_argument(
+        "--lerListaFuncionario",
+        action="store_true",
+        help="Lê os itens do ListBox de funcionários."
+    )
     
     args = parser.parse_args()
 
@@ -809,7 +1051,7 @@ def main():
     if args.lerControles:
         lerControles()
 
-    if args.lerControles:
+    if args.lerControlesImprimir:
         lerControlesImprimir()
 
     if args.diagnostico:
@@ -841,8 +1083,21 @@ def main():
 
     if args.clicarOndeEstaOMouse:
         clicarOndeEstaOMouse()
-    
-   
+
+    if args.lerNome:
+        lerNome()
+
+    if args.lerPropriedadesNome:
+        lerPropriedadesNome()
+
+    if args.lerNomePreview:
+        ler_textos_preview()
+
+    if args.investigarFuncionario:
+        investigar_funcionario()
+
+    if args.lerListaFuncionario:
+        ler_lista_funcionario()
 if __name__ == "__main__":
     main()
 
