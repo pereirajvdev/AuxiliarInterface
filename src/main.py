@@ -9,8 +9,13 @@ from pywinauto import Desktop
 
 #TITLE_TO_READ = "Preparando relatório - Ficha_Financeira_Resumo_Geral"
 
-TITLE_TO_READ = "Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
+#TITLE_TO_READ = "Gerador de Relatórios ( Versão: 4.0 ) - Recursos Humanos e Folha de Pagamento"
 
+#TITLE_TO_READ = "Folha - PREFEITURA MUNICIPAL DE TRES CORACOES - Abril de 2009"#"Form1"
+
+#TITLE_TO_READ = "Confirmar Salvar como"
+
+TITLE_TO_READ = "Menu: Arquivos / Cadastro de Funcionários"
 
 def lerScreen():
     print("Procurando janelas abertas...\n")
@@ -911,6 +916,584 @@ def ler_lista_funcionario():
     except Exception as e:
         print("Erro ao obter itens:", e)
 
+
+import ctypes
+from ctypes import wintypes
+
+from pywinauto import Desktop
+
+# --- Windows API (declarada uma única vez, com assinaturas corretas p/ 64 bits) ---
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+_user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+_user32.GetWindow.restype = wintypes.HWND
+_user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+_user32.GetAncestor.restype = wintypes.HWND
+_user32.GetDesktopWindow.argtypes = []
+_user32.GetDesktopWindow.restype = wintypes.HWND
+
+_GW_OWNER = 4
+_GA_PARENT = 1
+
+
+def listarJanelas():
+    import ctypes
+    from ctypes import wintypes
+    from pywinauto import Desktop
+
+    ignorar = {
+        "lidDialog",
+        "DataSetValidDialog",
+        "Chart editor",
+        "Editor de Cross-tab",
+        "Dictionary editor",
+        "Rich Edit",
+        "Task Host Window",
+        "CDA Server",
+        "RadeonSoftware",
+        "WUIconWindow",
+        "OneDrive",
+        "ad_msg_wnd",
+        "Window",
+        "Program Manager",
+        "Default IME",
+        "M",
+    }
+
+    # --- Windows API (assinaturas corretas, inclusive em 64 bits) ---
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetWindow.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
+    user32.GetDesktopWindow.argtypes = []
+    user32.GetDesktopWindow.restype = wintypes.HWND
+
+    GW_OWNER = 4
+    GA_PARENT = 1
+    desktop_hwnd = user32.GetDesktopWindow()
+
+    # 1) Descoberta + filtros originais + coleta de HWND
+    nos = {}     # hwnd -> {"titulo": str, "filhos": [hwnd, ...]}
+    ordem = []   # preserva a ordem de enumeração
+
+    for janela in Desktop(backend="win32").windows():
+        try:
+            titulo = janela.window_text().strip()
+
+            if not titulo:
+                continue
+
+            if titulo in ignorar:
+                continue
+
+            if "GDI+ Window" in titulo:
+                continue
+
+            if "cmd.exe" in titulo.lower():
+                continue
+
+            if "C:\\Windows" in titulo:
+                continue
+
+            if "AMD" in titulo:
+                continue
+
+            if "Microsoft" in titulo:
+                continue
+
+            if "Realtek" in titulo:
+                continue
+
+            if "Bluetooth" in titulo:
+                continue
+
+            if "HiddenFax" in titulo:
+                continue
+
+            if ".NET-BroadcastEventWindow" in titulo:
+                continue
+
+            hwnd = janela.handle
+            if hwnd in nos:  # cada janela aparece uma única vez
+                continue
+
+            nos[hwnd] = {"titulo": titulo, "filhos": []}
+            ordem.append(hwnd)
+
+        except Exception:
+            pass
+
+    # 2) Relação direta: filha real (GA_PARENT) tem prioridade; depois proprietária (GW_OWNER)
+    def pai_direto(hwnd):
+        pai = user32.GetAncestor(hwnd, GA_PARENT)
+        if pai and pai != desktop_hwnd:
+            return pai
+        return user32.GetWindow(hwnd, GW_OWNER) or None
+
+    # 3) Sobe a cadeia até achar um ancestral que esteja entre as janelas exibidas
+    def resolver_pai(hwnd):
+        visitados = {hwnd}
+        candidato = pai_direto(hwnd)
+        while candidato and candidato not in visitados:
+            if candidato in nos:
+                return candidato
+            visitados.add(candidato)
+            candidato = pai_direto(candidato)
+        return None
+
+    raizes = []
+    for hwnd in ordem:
+        try:
+            pai = resolver_pai(hwnd)
+        except Exception:
+            pai = None
+        if pai is None:
+            raizes.append(hwnd)
+        else:
+            nos[pai]["filhos"].append(hwnd)
+
+    # 4) Impressão da árvore
+    def imprimir(hwnd, prefixo="", ultimo=True, raiz=False):
+        titulo = nos[hwnd]["titulo"]
+        if raiz:
+            print(titulo)
+            prox_prefixo = "    "
+        else:
+            print(f"{prefixo}{'└── ' if ultimo else '├── '}{titulo}")
+            prox_prefixo = prefixo + ("    " if ultimo else "│   ")
+        filhos = nos[hwnd]["filhos"]
+        for i, filho in enumerate(filhos):
+            imprimir(filho, prox_prefixo, i == len(filhos) - 1)
+
+    for i, hwnd in enumerate(raizes):
+        imprimir(hwnd, raiz=True)
+        if i < len(raizes) - 1:
+            print()  # linha em branco entre árvores independentes
+
+def diagnosticar_grade_uia():
+    from pywinauto import Desktop
+
+    titulo_janela = "Licenças / Afastamentos / Exames"
+    titulo_grade = "Grade Licenças / Afastamentos"
+
+    print("\n" + "=" * 80)
+    print("DIAGNÓSTICO DA INTERFACE DE ACESSIBILIDADE DA GRADE")
+    print("=" * 80)
+
+    try:
+        desktop = Desktop(backend="uia")
+
+        janela = desktop.window(
+            title_re=".*Licenças / Afastamentos / Exames.*"
+        )
+        janela.wait("exists", timeout=5)
+
+        tabsheet = None
+
+        for controle in janela.descendants():
+            try:
+                info = controle.element_info
+
+                if (
+                    info.class_name == "TTabSheet"
+                    and info.name.strip() == titulo_grade
+                ):
+                    tabsheet = controle
+                    break
+
+            except Exception:
+                continue
+
+        if tabsheet is None:
+            print(f"TTabSheet não encontrado: {titulo_grade}")
+            return
+
+        print(f"\nTTabSheet: {tabsheet.element_info.name}")
+        print(f"Handle: {tabsheet.handle}")
+
+        componentes = [tabsheet] + tabsheet.descendants()
+
+        for controle in componentes:
+            info = controle.element_info
+
+            print("\n" + "-" * 80)
+            print(f"Classe: {info.class_name}")
+            print(f"Nome: {info.name!r}")
+            print(f"Tipo UIA: {info.control_type}")
+            print(f"Handle: {controle.handle}")
+
+            try:
+                elemento = info.element
+
+                print(f"Tipo do objeto acessível: {type(elemento)}")
+
+                for propriedade in (
+                    "CurrentName",
+                    "CurrentControlType",
+                    "CurrentIsControlElement",
+                    "CurrentIsContentElement",
+                ):
+                    try:
+                        valor = getattr(elemento, propriedade)
+                        print(f"{propriedade}: {valor}")
+                    except Exception as erro:
+                        print(f"{propriedade}: indisponível ({erro})")
+
+                try:
+                    padroes = elemento.GetSupportedPatterns()
+                    print(f"Padrões de acessibilidade: {padroes}")
+                except Exception as erro:
+                    print(f"Padrões indisponíveis: {erro}")
+
+            except Exception as erro:
+                print(f"Não foi possível consultar o elemento: {erro}")
+
+        print("\nDiagnóstico concluído.")
+
+    except Exception as erro:
+        print(f"Erro durante o diagnóstico: {erro}")
+
+def diagnosticar_mensagens_grade():
+    import win32gui
+    import win32con
+
+    titulo_janela = "Licenças / Afastamentos / Exames"
+    titulo_grade = "Grade Licenças / Afastamentos"
+
+    print("\n" + "=" * 80)
+    print("DIAGNÓSTICO WIN32 DA GRADE")
+    print("=" * 80)
+
+    janelas = []
+
+    def enumerar_janela(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+
+        titulo = win32gui.GetWindowText(hwnd)
+
+        if titulo_janela.casefold() in titulo.casefold():
+            janelas.append(hwnd)
+
+    win32gui.EnumWindows(enumerar_janela, None)
+
+    if not janelas:
+        print("Janela de Licenças não encontrada.")
+        return
+
+    hwnd_janela = janelas[0]
+
+    print(f"Janela principal: {hwnd_janela}")
+
+    tabsheets = []
+
+    def enumerar_filhos(hwnd, _):
+        classe = win32gui.GetClassName(hwnd)
+        texto = win32gui.GetWindowText(hwnd)
+
+        if (
+            classe == "TTabSheet"
+            and texto.strip() == titulo_grade
+        ):
+            tabsheets.append(hwnd)
+
+    win32gui.EnumChildWindows(
+        hwnd_janela,
+        enumerar_filhos,
+        None
+    )
+
+    if not tabsheets:
+        print("TTabSheet da grade não encontrado.")
+        return
+
+    hwnd_tabsheet = tabsheets[0]
+    grades = []
+
+    def enumerar_grade(hwnd, _):
+        classe = win32gui.GetClassName(hwnd)
+
+        if classe in ("TcxGrid", "TcxGridSite"):
+            grades.append(hwnd)
+
+    win32gui.EnumChildWindows(
+        hwnd_tabsheet,
+        enumerar_grade,
+        None
+    )
+
+    if not grades:
+        print("TcxGrid/TcxGridSite não encontrados.")
+        print("O componente pode não expor os filhos via Win32.")
+        return
+
+    for hwnd in grades:
+        print("\n" + "-" * 60)
+        print(f"Handle: {hwnd}")
+        print(f"Classe: {win32gui.GetClassName(hwnd)}")
+        print(f"Texto: {win32gui.GetWindowText(hwnd)!r}")
+        print(f"Retângulo: {win32gui.GetWindowRect(hwnd)}")
+        print(f"Pai: {win32gui.GetParent(hwnd)}")
+
+        # WM_GETTEXT consulta texto convencional do controle.
+        # Não envia cliques, teclas nem altera registros.
+        try:
+            tamanho = win32gui.SendMessage(
+                hwnd,
+                win32con.WM_GETTEXTLENGTH,
+                0,
+                0
+            )
+
+            print(f"WM_GETTEXTLENGTH: {tamanho}")
+
+            buffer = win32gui.PyMakeBuffer(
+                max(int(tamanho) + 2, 2)
+            )
+
+            resultado = win32gui.SendMessage(
+                hwnd,
+                win32con.WM_GETTEXT,
+                len(buffer),
+                buffer
+            )
+
+            print(f"WM_GETTEXT retorno: {resultado}")
+
+        except Exception as erro:
+            print(f"Consulta WM_GETTEXT indisponível: {erro}")
+
+    print("\nDiagnóstico concluído.")
+
+import ctypes
+from ctypes import wintypes
+
+import comtypes
+import comtypes.client
+from comtypes.automation import VARIANT
+
+
+def diagnosticar_msaa_grade():
+    """
+    Inspeciona os filhos MSAA da TcxGrid e da TcxGridSite.
+    Não clica nem altera os dados da grade.
+    """
+
+    import win32gui
+
+    oleacc = ctypes.OleDLL("oleacc")
+
+    # IID da interface IAccessible.
+    iid_ia = comtypes.GUID(
+        "{618736E0-3C3D-11CF-810C-00AA00389B71}"
+    )
+
+    oleacc.AccessibleObjectFromWindow.argtypes = [
+        wintypes.HWND,
+        wintypes.DWORD,
+        ctypes.POINTER(comtypes.GUID),
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    oleacc.AccessibleObjectFromWindow.restype = ctypes.c_long
+
+    oleacc.AccessibleChildren.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_long,
+        ctypes.c_long,
+        ctypes.POINTER(VARIANT),
+        ctypes.POINTER(ctypes.c_long),
+    ]
+    oleacc.AccessibleChildren.restype = ctypes.c_long
+
+    def consultar_propriedade(objeto, propriedade, child_id=0):
+        """
+        Consulta uma propriedade MSAA.
+        Retorna o texto do erro caso a propriedade não esteja disponível.
+        """
+        try:
+            metodo = getattr(objeto, propriedade)
+
+            # Interfaces geradas pelo comtypes podem expor
+            # propriedades indexadas como named_property.
+            try:
+                resultado = metodo[child_id]
+            except (TypeError, AttributeError, KeyError):
+                try:
+                    resultado = metodo(child_id)
+                except Exception:
+                    nome_getter = f"get_{propriedade}"
+                    getter = getattr(objeto, nome_getter, None)
+
+                    if getter is None:
+                        return "<indisponível>"
+
+                    resultado = getter(child_id)
+
+            if resultado is None:
+                return ""
+
+            return str(resultado)
+
+        except Exception as erro:
+            return f"<erro: {erro}>"
+
+    def inspecionar_janela(hwnd, classe):
+        print("\n" + "-" * 80)
+        print(f"Classe: {classe} | Handle: {hwnd}")
+
+        ponteiro = ctypes.c_void_p()
+
+        hr = oleacc.AccessibleObjectFromWindow(
+            hwnd,
+            0,
+            ctypes.byref(iid_ia),
+            ctypes.byref(ponteiro),
+        )
+
+        print(f"AccessibleObjectFromWindow: 0x{hr & 0xFFFFFFFF:08X}")
+
+        if hr != 0 or not ponteiro.value:
+            print("Não foi possível obter a interface IAccessible.")
+            return
+
+        try:
+            objeto = ctypes.cast(
+                ponteiro,
+                ctypes.POINTER(comtypes.IUnknown),
+            )
+
+            # Converte o ponteiro COM para uma interface IAccessible.
+            objeto = ctypes.cast(
+                ponteiro,
+                ctypes.POINTER(comtypes.IUnknown),
+            )
+
+            interface = objeto.QueryInterface(iid_ia)
+
+            try:
+                quantidade = int(interface.accChildCount)
+            except Exception as erro:
+                print(f"Não foi possível ler accChildCount: {erro}")
+                return
+
+            print(f"Quantidade de filhos: {quantidade}")
+
+            if quantidade <= 0:
+                return
+
+            filhos = (VARIANT * quantidade)()
+            obtidos = ctypes.c_long(0)
+
+            hr_filhos = oleacc.AccessibleChildren(
+                ponteiro,
+                0,
+                quantidade,
+                filhos,
+                ctypes.byref(obtidos),
+            )
+
+            print(
+                "AccessibleChildren: "
+                f"0x{hr_filhos & 0xFFFFFFFF:08X}"
+            )
+            print(f"Filhos retornados: {obtidos.value}")
+
+            for indice in range(obtidos.value):
+                filho = filhos[indice]
+
+                print(f"\nFilho [{indice + 1}]")
+                print(f"  VARIANT.vt: {filho.vt}")
+
+                # VT_I4 = 3: identificador de filho simples.
+                if filho.vt == 3:
+                    child_id = int(filho.value)
+                    print(f"  Tipo: identificador MSAA ({child_id})")
+
+                    for prop in (
+                        "accName",
+                        "accValue",
+                        "accDescription",
+                        "accRole",
+                        "accState",
+                    ):
+                        print(
+                            f"  {prop}: "
+                            f"{consultar_propriedade(interface, prop, child_id)}"
+                        )
+
+                # VT_DISPATCH = 9 ou VT_UNKNOWN = 13:
+                # o filho é outro objeto COM.
+                elif filho.vt in (9, 13):
+                    try:
+                        filho_objeto = filho.value
+                        print(f"  Tipo: objeto COM ({type(filho_objeto).__name__})")
+
+                        # Se o VARIANT já expôs o objeto IDispatch,
+                        # tentamos consultar as propriedades diretamente.
+                        for prop in (
+                            "accName",
+                            "accValue",
+                            "accDescription",
+                            "accRole",
+                            "accState",
+                            "accChildCount",
+                        ):
+                            print(
+                                f"  {prop}: "
+                                f"{consultar_propriedade(filho_objeto, prop)}"
+                            )
+
+                    except Exception as erro:
+                        print(f"  Erro ao examinar objeto COM: {erro}")
+
+                else:
+                    print(f"  Tipo VARIANT não tratado: {filho.vt}")
+
+        finally:
+            # Libera a referência COM obtida por AccessibleObjectFromWindow.
+            ctypes.cast(
+                ponteiro,
+                ctypes.POINTER(comtypes.IUnknown),
+            ).Release()
+
+    print("\n" + "=" * 80)
+    print("DIAGNÓSTICO MSAA — FILHOS DA GRADE")
+    print("=" * 80)
+
+    titulos = [
+        "Licenças / Afastamentos / Exames",
+    ]
+
+    janela = None
+
+    for titulo in titulos:
+        hwnd = win32gui.FindWindow(None, titulo)
+        if hwnd:
+            janela = hwnd
+            break
+
+    if not janela:
+        print("Janela principal não encontrada.")
+        return
+
+    grades = []
+
+    def localizar_grades(hwnd, _):
+        classe = win32gui.GetClassName(hwnd)
+
+        if classe in ("TcxGrid", "TcxGridSite"):
+            grades.append((hwnd, classe))
+
+    win32gui.EnumChildWindows(janela, localizar_grades, None)
+
+    if not grades:
+        print("Nenhuma TcxGrid ou TcxGridSite encontrada.")
+        return
+
+    for hwnd, classe in grades:
+        inspecionar_janela(hwnd, classe)
+
 def main():
     parser = argparse.ArgumentParser(
         description="Auxiliar para interação com a interface do sistema."
@@ -1030,11 +1613,34 @@ def main():
         help="Investiga os controles de seleção do funcionário."
     )
 
-
     parser.add_argument(
         "--lerListaFuncionario",
         action="store_true",
         help="Lê os itens do ListBox de funcionários."
+    )
+
+    parser.add_argument(
+        "--listarJanelas",
+        action="store_true",
+        help="Lista o nome e o handle das janelas abertas."
+    )
+
+    parser.add_argument(
+        "--diagnosticarGradeUIA",
+        action="store_true",
+        help="Investiga a grade de Licenças usando UI Automation."
+    )
+
+    parser.add_argument(
+        "--diagnosticarMensagensGrade",
+        action="store_true",
+        help="Investiga mensagens Win32 do TcxGrid."
+    )
+
+    parser.add_argument(
+        "--diagnosticarMSAAGrade",
+        action="store_true",
+        help="Investiga a acessibilidade MSAA da grade."
     )
     
     args = parser.parse_args()
@@ -1098,51 +1704,18 @@ def main():
 
     if args.lerListaFuncionario:
         ler_lista_funcionario()
+
+    if args.listarJanelas:
+        listarJanelas()
+
+    if args.diagnosticarGradeUIA:
+        diagnosticar_grade_uia()
+
+    if args.diagnosticarMensagensGrade:
+        diagnosticar_mensagens_grade()      
+
+    if args.diagnosticarMSAAGrade:
+        diagnosticar_msaa_grade()
+
 if __name__ == "__main__":
     main()
-
-
-user32 = ctypes.windll.user32
-
-
-class POINT(ctypes.Structure):
-    _fields_ = [
-        ("x", wintypes.LONG),
-        ("y", wintypes.LONG),
-    ]
-
-'''
-def ler_controle_mouse():
-    ponto = POINT()
-
-    user32.GetCursorPos(ctypes.byref(ponto))
-
-    hwnd = user32.WindowFromPoint(ponto)
-
-    print("=" * 60)
-    print("POSIÇÃO DO MOUSE")
-    print("=" * 60)
-    print(f"X: {ponto.x}")
-    print(f"Y: {ponto.y}")
-
-    print("\n" + "=" * 60)
-    print("WINDOWFROMPOINT")
-    print("=" * 60)
-    print(f"HWND: {hwnd}")
-
-    if hwnd:
-        buffer = ctypes.create_unicode_buffer(256)
-        user32.GetClassNameW(hwnd, buffer, 256)
-
-        print(f"Classe: {buffer.value}")
-
-        buffer = ctypes.create_unicode_buffer(256)
-        user32.GetWindowTextW(hwnd, buffer, 256)
-
-        print(f"Texto : {buffer.value!r}")
-
-
-if __name__ == "__main__":
-    ler_controle_mouse()
-
-'''
