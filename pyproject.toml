@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auxiliar-interface"
+version = "1.0.0"
+description = "Caixa de ferramentas para investigar, diagnosticar e automatizar interfaces gráficas Windows (Win32, UIA, MSAA)."
+requires-python = ">=3.9"
+dependencies = [
+    "pywinauto>=0.6.8; sys_platform == 'win32'",
+    "comtypes>=1.1.14; sys_platform == 'win32'",
+]
+
+[tool.setuptools.packages.find]
+include = ["auxiliar_interface*"]
